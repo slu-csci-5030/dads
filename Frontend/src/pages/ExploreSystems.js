@@ -29,8 +29,6 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import HelpBox from '../components/FunctionDetail/HelpBox';
 
-
-
 function ExploreSystems() {
 
     // State Hooks
@@ -56,6 +54,20 @@ function ExploreSystems() {
     const {page, setPage} = usePage();
     // Context Hooks
     const { filters, setFilters } = useFilters();
+
+    const [isDarkMode, setIsDarkMode] = useState(false);
+
+    useEffect(() => {
+        if (isDarkMode) {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+    }, [isDarkMode]);
+
+    const toggleDarkMode = () => {
+        setIsDarkMode(!isDarkMode);
+    };
 
     // Menu setup
     const [anchorEl, setAnchorEl] = React.useState(null);
@@ -816,6 +828,14 @@ function ExploreSystems() {
                     </Grid>
 
                     <Grid className="results-table" item xs={6}>
+                        <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            style={{ float: "right", marginRight: "10px" }}
+                            onClick={toggleDarkMode}
+                        >
+                            {isDarkMode ? "Light Mode" : "Dark Mode"}
+                        </Button>
                         <span
                             style={{
                                 float: "right",
