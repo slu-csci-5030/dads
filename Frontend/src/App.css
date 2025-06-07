@@ -372,3 +372,10 @@ p.sidebarHead {
 .dark-mode .results-table .paginated-table .help-box a {
     color: #ff9999;
 }
+
+.dark-mode .results-table label[htmlFor='pages'] {
+    color: #ffffff;
+}
+.dark-mode .results-table select#pages {
+    color: #ffffff;
+}
