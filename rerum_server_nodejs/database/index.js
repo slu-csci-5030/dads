@@ -12,11 +12,11 @@ const connected = async function () {
 }
 const db = client.db(process.env.MONGODBNAME)?.collection(process.env.MONGODBCOLLECTION)
 const connect = async () => {
-        await client.connect()
-        console.dir({
-            db : process.env.MONGODBNAME,
-            coll : process.env.MONGODBCOLLECTION
-        })
+    await client.connect()
+    console.dir({
+        db: process.env.MONGODBNAME,
+        coll: process.env.MONGODBCOLLECTION
+    })
 }
 connect().catch(console.dir)
 

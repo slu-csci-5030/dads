@@ -9,7 +9,13 @@ between frontend and backend
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from postgres_connector import PostgresConnector
+from pymongo import MongoClient
 
+
+# MongoDB setup
+mongo_client = MongoClient("mongodb://localhost:27017")
+mongo_db = mongo_client["dynamsystems"]
+mongo_collection = mongo_db["models"]
 app = Flask(__name__)
 CORS(app, origins=['http://localhost:3000', 'http://127.0.0.1:3000', '*'])
 
@@ -96,6 +102,22 @@ def get_graph_metadata():
         return jsonify(metadata)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+# New route to get all models from MongoDB
+@app.route('/get_mongo_models', methods=['GET'])
+def get_mongo_models():
+    try:
+        degree = request.args.get("degree")
+        query = {}
+
+        if degree:
+            query["degree"] = int(degree)
+
+        results = list(mongo_collection.find(query, {"_id": 0}))
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run()
