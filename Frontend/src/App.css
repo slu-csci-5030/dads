@@ -263,3 +263,119 @@ p.sidebarHead {
   color: white;
 	--bs-accordion-active-bg: rgb(46 59 85);
 }
+
+
+/* Dark Mode */
+.dark-mode {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+}
+
+.dark-mode .sidebar {
+    background-color: #2c2c2c;
+}
+
+.dark-mode .results-table {
+    background-color: #1a1a1a;
+}
+
+.dark-mode .sidebarHead {
+    color: #ffffff;
+}
+
+.dark-mode .btn-primary {
+    background-color: #4a90e2;
+    border-color: #4a90e2;
+}
+
+.dark-mode .btn-danger {
+    background-color: #e94e4e;
+    border-color: #e94e4e;
+}
+
+.dark-mode .btn-outline-secondary {
+    color: #e0e0e0;
+    border-color: #e0e0e0;
+}
+
+.dark-mode .btn-outline-primary {
+    color: #4a90e2;
+    border-color: #4a90e2;
+}
+
+.dark-mode a {
+    color: #ff9999;
+}
+
+.dark-mode .caret::before {
+    color: #e0e0e0;
+}
+
+.dark-mode .results-table label {
+    color: #e0e0e0;
+}
+
+.dark-mode .results-table select {
+    background-color: #2c2c2c;
+    color: #e0e0e0;
+    border-color: #4a90e2;
+}
+
+.dark-mode .results-table select option {
+    background-color: #2c2c2c;
+    color: #e0e0e0;
+}
+
+.dark-mode table {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+}
+
+.dark-mode table th {
+    background-color: #2c2c2c;
+    color: #ffffff;
+    border-color: #4a90e2;
+}
+
+.dark-mode table td {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border-color: #4a90e2;
+}
+
+.dark-mode table td a {
+    color: #ff9999;
+}
+
+.dark-mode .active-filters-banner {
+    background-color: #2c2c2c;
+    color: #e0e0e0;
+    border-color: #4a90e2;
+}
+
+.dark-mode .results-table .paginated-table th {
+    background-color: #2c2c2c;
+    color: #ffffff;
+    border-color: #4a90e0;
+}
+
+.dark-mode .results-table .paginated-table th span {
+    color: #ffffff;
+}
+
+.dark-mode .results-table .paginated-table .help-box {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border-color: #4a90e2;
+}
+
+.dark-mode .results-table .paginated-table .help-box a {
+    color: #ff9999;
+}
+
+.dark-mode .results-table label[htmlFor='pages'] {
+    color: #ffffff;
+}
+.dark-mode .results-table select#pages {
+    color: #ffffff;
+}
