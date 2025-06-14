@@ -3,19 +3,19 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 const _tokenError = function (err, req, res, next) {
-    if(!err.code || err.code !== "invalid_token"){ 
+    if (!err.code || err.code !== "invalid_token") {
         next(err)
         return
     }
-    try{
+    try {
         let user = JSON.parse(Buffer.from(req.header("authorization").split(" ")[1].split('.')[1], 'base64').toString())
-        if(isBot(user)){
+        if (isBot(user)) {
             console.log("Request allowed via bot check")
             next()
             return
         }
     }
-    catch(e){
+    catch (e) {
         e.message = e.statusMessage = `This token did not contain a known RERUM agent.`
         e.status = 401
         e.statusCode = 401
@@ -25,11 +25,11 @@ const _tokenError = function (err, req, res, next) {
 }
 
 const _extractUser = (req, res, next) => {
-    try{
+    try {
         req.user = JSON.parse(Buffer.from(req.header("authorization").split(" ")[1].split('.')[1], 'base64').toString())
         next()
     }
-    catch(e){
+    catch (e) {
         e.message = e.statusMessage = `This token did not contain a known RERUM agent.}`
         e.status = 401
         e.statusCode = 401
@@ -43,8 +43,18 @@ const _extractUser = (req, res, next) => {
  *   // do authorized things
  * });
  */
-const checkJwt = [READONLY, auth(), _tokenError, _extractUser]
-
+const checkJwt = [
+    READONLY,
+    auth({
+        issuer: process.env.ISSUER,
+        secret: process.env.JWT_SECRET,
+        audience: 'local-dev',
+        algorithms: ['HS256'],
+        tokenSigningAlg: 'HS256',
+    }),
+    _tokenError,
+    _extractUser
+]
 /**
  * Public API proxy to generate new access tokens through Auth0
  * with a refresh token when original access has expired.
@@ -58,38 +68,38 @@ const generateNewAccessToken = async (req, res, next) => {
         client_id: process.env.CLIENT_ID,
         client_secret: process.env.CLIENT_SECRET,
         refresh_token: req.body.refresh_token,
-        redirect_uri:process.env.RERUM_PREFIX
+        redirect_uri: process.env.RERUM_PREFIX
     }
-    try{
+    try {
         // Successful responses from auth 0 look like {"refresh_token":"BLAHBLAH", "access_token":"BLAHBLAH"}
         // Error responses come back as successful, but they look like {"error":"blahblah", "error_description": "this is why"}
         const tokenObj = await fetch('https://cubap.auth0.com/oauth/token',
-        {
-            method: 'POST',
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body:JSON.stringify(form)
-        })
-        .then(resp => resp.json())
-        .catch(err => {
-            // Mock Auth0 error object
-            console.error(err)
-            return {"error": true, "error_description":err}
-        })
+            {
+                method: 'POST',
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(form)
+            })
+            .then(resp => resp.json())
+            .catch(err => {
+                // Mock Auth0 error object
+                console.error(err)
+                return { "error": true, "error_description": err }
+            })
         // Here we need to check if this is an Auth0 success object or an Auth0 error object
-        if(tokenObj.error){
+        if (tokenObj.error) {
             console.error(tokenObj.error_description)
             res.status(500).send(tokenObj.error_description)
         }
-        else{
-            res.status(200).send(tokenObj) 
+        else {
+            res.status(200).send(tokenObj)
         }
     }
     catch (e) {
         console.error(e.response ? e.response.body : e.message ? e.message : e)
         res.status(500).send(e)
-     }
+    }
 }
 
 /**
@@ -104,38 +114,38 @@ const generateNewRefreshToken = async (req, res, next) => {
         client_id: process.env.CLIENT_ID,
         client_secret: process.env.CLIENT_SECRET,
         code: req.body.authorization_code,
-        redirect_uri:process.env.RERUM_PREFIX
+        redirect_uri: process.env.RERUM_PREFIX
     }
     try {
         // Successful responses from auth 0 look like {"refresh_token":"BLAHBLAH", "access_token":"BLAHBLAH"}
         // Error responses come back as successful, but they look like {"error":"blahblah", "error_description": "this is why"}
         const tokenObj = await fetch('https://cubap.auth0.com/oauth/token',
-        {
-            method: 'POST',
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body:JSON.stringify(form)
-        })
-        .then(resp => resp.json())
-        .catch(err => {
-            // Mock Auth0 error object
-            console.error(err)
-            return {"error": true, "error_description":err}
-        })
+            {
+                method: 'POST',
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(form)
+            })
+            .then(resp => resp.json())
+            .catch(err => {
+                // Mock Auth0 error object
+                console.error(err)
+                return { "error": true, "error_description": err }
+            })
         // Here we need to check if this is an Auth0 success object or an Auth0 error object
-        if(tokenObj.error){
+        if (tokenObj.error) {
             console.error(tokenObj.error_description)
             res.status(500).send(tokenObj.error_description)
         }
-        else{
-            res.status(200).send(tokenObj) 
+        else {
+            res.status(200).send(tokenObj)
         }
-     } 
-     catch (e) {
+    }
+    catch (e) {
         console.error(e.response ? e.response.body : e.message ? e.message : e)
         res.status(500).send(e)
-     }
+    }
 }
 
 /**
@@ -174,12 +184,12 @@ const isBot = (userObj) => {
 }
 
 function READONLY(req, res, next) {
-     if(process.env.READONLY=="true"){
-        res.status(503).json({"message":"RERUM v1 is read only at this time.  We apologize for the inconvenience.  Try again later."})
+    if (process.env.READONLY == "true") {
+        res.status(503).json({ "message": "RERUM v1 is read only at this time.  We apologize for the inconvenience.  Try again later." })
         return
-     }
-     next()
-     return
+    }
+    next()
+    return
 }
 
 export default {

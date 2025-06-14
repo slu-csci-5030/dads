@@ -9,13 +9,14 @@ import debug from 'debug'
 debug('rerum_server_nodejs:server')
 import http from "http"
 import dotenv from "dotenv"
+import { connected } from '../database/index.js'
 dotenv.config()
 
 /**
  * Get port from environment and store in Express.
  */
 
-const port = process.env.PORT ?? 3000
+const port = process.env.PORT ?? 3001
 app.set('port', port)
 
 /**
@@ -34,7 +35,7 @@ server.on('listening', onListening)
 
 /**
  * Control the keep alive header
- */ 
+ */
 // Ensure all inactive connections are terminated by the ALB, by setting this a few seconds higher than the ALB idle timeout
 server.keepAliveTimeout = 8 * 1000 //8 seconds
 // Ensure the headersTimeout is set higher than the keepAliveTimeout due to this nodejs regression bug: https://github.com/nodejs/node/issues/27363
@@ -67,7 +68,7 @@ function onError(error) {
  */
 
 function onListening() {
-  console.log("LISTENING ON "+port)
+  console.log("LISTENING ON " + port)
   const addr = server.address()
   const bind = typeof addr === 'string'
     ? 'pipe ' + addr

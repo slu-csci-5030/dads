@@ -11,6 +11,9 @@
  */
 import { newID, isValidID, db } from './database/index.js'
 import utils from './utils.js'
+
+
+
 const ObjectID = newID
 
 // Handle index actions
@@ -28,7 +31,7 @@ const index = function (req, res, next) {
  * @return A boolean
  */
 function _contextid(contextInput) {
-    if(!Array.isArray(contextInput) && typeof contextInput !== "string") return false
+    if (!Array.isArray(contextInput) && typeof contextInput !== "string") return false
     let bool = false
     let contextURI = typeof contextInput === "string" ? contextInput : "unknown"
     const contextCheck = (c) => contextURI.includes(c)
@@ -38,11 +41,11 @@ function _contextid(contextInput) {
         "www.w3.org/ns/anno.jsonld",
         "www.w3.org/ns/oa.jsonld"
     ]
-    if(Array.isArray(contextInput)) {
-        for(const c of contextInput) {
+    if (Array.isArray(contextInput)) {
+        for (const c of contextInput) {
             contextURI = c
             bool = knownContexts.some(contextCheck)
-            if(bool) break
+            if (bool) break
         }
     }
     else {
@@ -60,13 +63,13 @@ function _contextid(contextInput) {
  * @return JSON with the appropriate modifications around the 'id;, '@id', and '_id' properties.
  */
 const idNegotiation = function (resBody) {
-    if(!resBody) return
+    if (!resBody) return
     const _id = resBody._id
     delete resBody._id
-    if(!resBody["@context"]) return resBody
+    if (!resBody["@context"]) return resBody
     let modifiedResBody = JSON.parse(JSON.stringify(resBody))
     const context = { "@context": resBody["@context"] }
-    if(_contextid(resBody["@context"])) {
+    if (_contextid(resBody["@context"])) {
         delete resBody["@id"]
         delete resBody["@context"]
         modifiedResBody = Object.assign(context, { "id": process.env.RERUM_ID_PREFIX + _id }, resBody)
@@ -81,25 +84,25 @@ const idNegotiation = function (resBody) {
  * We error out right here with next(createExpressError({"code" : 11000}))
  * @param slug_id A proposed _id.  
  * 
- */  
-const generateSlugId = async function(slug_id="", next){
-    let slug_return = {"slug_id":"", "code":0}
+ */
+const generateSlugId = async function (slug_id = "", next) {
+    let slug_return = { "slug_id": "", "code": 0 }
     let slug
-    if(slug_id){
+    if (slug_id) {
         slug_return.slug_id = slug_id
         try {
-            slug = await db.findOne({"$or":[{"_id": slug_id}, {"__rerum.slug": slug_id}]})
-        } 
+            slug = await db.findOne({ "$or": [{ "_id": slug_id }, { "__rerum.slug": slug_id }] })
+        }
         catch (error) {
             //A DB problem, so we could not check.  Assume it's usable and let errors happen downstream.
             console.error(error)
             //slug_return.code = error.code
         }
-        if(null !== slug){
+        if (null !== slug) {
             //This already exist, give the mongodb error code.
             slug_return.code = 11000
         }
-    } 
+    }
     return slug_return
 }
 
@@ -112,17 +115,19 @@ const generateSlugId = async function(slug_id="", next){
 const create = async function (req, res, next) {
     res.set("Content-Type", "application/json; charset=utf-8")
     let slug = ""
-    if(req.get("Slug")){
+    if (req.get("Slug")) {
         let slug_json = await generateSlugId(req.get("Slug"), next)
-        if(slug_json.code){
+        if (slug_json.code) {
             next(createExpressError(slug_json))
             return
         }
-        else{
+        else {
             slug = slug_json.slug_id
         }
     }
-    
+
+    console.log('REQUEST BODY:', JSON.stringify(req.body, null, 2));
+
     let generatorAgent = getAgentClaim(req, next)
     let context = req.body["@context"] ? { "@context": req.body["@context"] } : {}
     let provided = JSON.parse(JSON.stringify(req.body))
@@ -133,9 +138,9 @@ const create = async function (req, res, next) {
     delete provided["__rerum"]
     delete provided["@id"]
     // id is also protected in this case, so it can't be set.
-    if(_contextid(provided["@context"])) delete provided.id
+    if (_contextid(provided["@context"])) delete provided.id
     delete provided["@context"]
-    
+
     let newObject = Object.assign(context, { "@id": process.env.RERUM_ID_PREFIX + id }, provided, rerumProp, { "_id": id })
     console.log("CREATE")
     try {
@@ -143,7 +148,7 @@ const create = async function (req, res, next) {
         res.set(utils.configureWebAnnoHeadersFor(newObject))
         newObject = idNegotiation(newObject)
         newObject.new_obj_state = JSON.parse(JSON.stringify(newObject))
-        res.location(newObject[_contextid(newObject["@context"]) ? "id":"@id"])
+        res.location(newObject[_contextid(newObject["@context"]) ? "id" : "@id"])
         res.status(201)
         res.json(newObject)
     }
@@ -165,18 +170,18 @@ const create = async function (req, res, next) {
  * If there is an id parameter, we ignore body, and continue with that id
  * 
  * */
-const deleteObj = async function(req, res, next) {
+const deleteObj = async function (req, res, next) {
     let id
     let err = { message: `` }
     try {
         id = req.params["_id"] ?? parseDocumentID(JSON.parse(JSON.stringify(req.body))["@id"])
-    } catch(error){
+    } catch (error) {
         next(createExpressError(error))
     }
     let agentRequestingDelete = getAgentClaim(req, next)
     let originalObject
     try {
-        originalObject = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+        originalObject = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
     } catch (error) {
         next(createExpressError(error))
         return
@@ -262,14 +267,14 @@ const putUpdate = async function (req, res, next) {
     let generatorAgent = getAgentClaim(req, next)
     const idReceived = objectReceived["@id"] ?? objectReceived.id
     if (idReceived) {
-        if(!idReceived.includes(process.env.RERUM_ID_PREFIX)){
+        if (!idReceived.includes(process.env.RERUM_ID_PREFIX)) {
             //This is not a regular update.  This object needs to be imported, it isn't in RERUM yet.
             return _import(req, res, next)
         }
         let id = parseDocumentID(idReceived)
         let originalObject
         try {
-            originalObject = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+            originalObject = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
         } catch (error) {
             next(createExpressError(error))
             return
@@ -295,9 +300,9 @@ const putUpdate = async function (req, res, next) {
             delete objectReceived["_id"]
             delete objectReceived["@id"]
             // id is also protected in this case, so it can't be set.
-            if(_contextid(objectReceived["@context"])) delete objectReceived.id
+            if (_contextid(objectReceived["@context"])) delete objectReceived.id
             delete objectReceived["@context"]
-            
+
             let newObject = Object.assign(context, { "@id": process.env.RERUM_ID_PREFIX + id }, objectReceived, rerumProp, { "_id": id })
             console.log("UPDATE")
             try {
@@ -307,7 +312,7 @@ const putUpdate = async function (req, res, next) {
                     res.set(utils.configureWebAnnoHeadersFor(newObject))
                     newObject = idNegotiation(newObject)
                     newObject.new_obj_state = JSON.parse(JSON.stringify(newObject))
-                    res.location(newObject[_contextid(newObject["@context"]) ? "id":"@id"])
+                    res.location(newObject[_contextid(newObject["@context"]) ? "id" : "@id"])
                     res.status(200)
                     res.json(newObject)
                     return
@@ -354,9 +359,9 @@ async function _import(req, res, next) {
     delete objectReceived["_id"]
     delete objectReceived["@id"]
     // id is also protected in this case, so it can't be set.
-    if(_contextid(objectReceived["@context"])) delete objectReceived.id
+    if (_contextid(objectReceived["@context"])) delete objectReceived.id
     delete objectReceived["@context"]
-    
+
     let newObject = Object.assign(context, { "@id": process.env.RERUM_ID_PREFIX + id }, objectReceived, rerumProp, { "_id": id })
     console.log("IMPORT")
     try {
@@ -364,7 +369,7 @@ async function _import(req, res, next) {
         res.set(utils.configureWebAnnoHeadersFor(newObject))
         newObject = idNegotiation(newObject)
         newObject.new_obj_state = JSON.parse(JSON.stringify(newObject))
-        res.location(newObject[_contextid(newObject["@context"]) ? "id":"@id"])
+        res.location(newObject[_contextid(newObject["@context"]) ? "id" : "@id"])
         res.status(200)
         res.json(newObject)
     }
@@ -393,7 +398,7 @@ const patchUpdate = async function (req, res, next) {
         let id = parseDocumentID(receivedID)
         let originalObject
         try {
-            originalObject = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+            originalObject = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
         } catch (error) {
             next(createExpressError(error))
             return
@@ -418,7 +423,7 @@ const patchUpdate = async function (req, res, next) {
             delete objectReceived._id //can't patch this
             delete objectReceived["@id"] //can't patch this
             // id is also protected in this case, so it can't be set.
-            if(_contextid(objectReceived["@context"])) delete objectReceived.id
+            if (_contextid(objectReceived["@context"])) delete objectReceived.id
             //A patch only alters existing keys.  Remove non-existent keys from the object received in the request body.
             for (let k in objectReceived) {
                 if (originalObject.hasOwnProperty(k)) {
@@ -440,7 +445,7 @@ const patchUpdate = async function (req, res, next) {
                 res.set(utils.configureWebAnnoHeadersFor(originalObject))
                 originalObject = idNegotiation(originalObject)
                 originalObject.new_obj_state = JSON.parse(JSON.stringify(originalObject))
-                res.location(originalObject[_contextid(originalObject["@context"]) ? "id":"@id"])
+                res.location(originalObject[_contextid(originalObject["@context"]) ? "id" : "@id"])
                 res.status(200)
                 res.json(originalObject)
                 return
@@ -452,7 +457,7 @@ const patchUpdate = async function (req, res, next) {
             delete patchedObject["_id"]
             delete patchedObject["@id"]
             // id is also protected in this case, so it can't be set.
-            if(_contextid(patchedObject["@context"])) delete patchedObject.id
+            if (_contextid(patchedObject["@context"])) delete patchedObject.id
             delete patchedObject["@context"]
             let newObject = Object.assign(context, { "@id": process.env.RERUM_ID_PREFIX + id }, patchedObject, rerumProp, { "_id": id })
             console.log("PATCH UPDATE")
@@ -463,7 +468,7 @@ const patchUpdate = async function (req, res, next) {
                     res.set(utils.configureWebAnnoHeadersFor(newObject))
                     newObject = idNegotiation(newObject)
                     newObject.new_obj_state = JSON.parse(JSON.stringify(newObject))
-                    res.location(newObject[_contextid(newObject["@context"]) ? "id":"@id"])
+                    res.location(newObject[_contextid(newObject["@context"]) ? "id" : "@id"])
                     res.status(200)
                     res.json(newObject)
                     return
@@ -510,7 +515,7 @@ const patchSet = async function (req, res, next) {
         let id = parseDocumentID(receivedID)
         let originalObject
         try {
-            originalObject = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+            originalObject = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
         } catch (error) {
             next(createExpressError(error))
             return
@@ -531,7 +536,7 @@ const patchSet = async function (req, res, next) {
         }
         else {
             patchedObject = JSON.parse(JSON.stringify(originalObject))
-            if(_contextid(originalObject["@context"])) {
+            if (_contextid(originalObject["@context"])) {
                 // If the original object has a context that needs id protected, make sure you don't set it.
                 delete objectReceived.id
                 delete originalObject.id
@@ -554,7 +559,7 @@ const patchSet = async function (req, res, next) {
                 res.set(utils.configureWebAnnoHeadersFor(originalObject))
                 originalObject = idNegotiation(originalObject)
                 originalObject.new_obj_state = JSON.parse(JSON.stringify(originalObject))
-                res.location(originalObject[_contextid(originalObject["@context"]) ? "id":"@id"])
+                res.location(originalObject[_contextid(originalObject["@context"]) ? "id" : "@id"])
                 res.status(200)
                 res.json(originalObject)
                 return
@@ -574,7 +579,7 @@ const patchSet = async function (req, res, next) {
                     res.set(utils.configureWebAnnoHeadersFor(newObject))
                     newObject = idNegotiation(newObject)
                     newObject.new_obj_state = JSON.parse(JSON.stringify(newObject))
-                    res.location(newObject[_contextid(newObject["@context"]) ? "id":"@id"])
+                    res.location(newObject[_contextid(newObject["@context"]) ? "id" : "@id"])
                     res.status(200)
                     res.json(newObject)
                     return
@@ -620,7 +625,7 @@ const patchUnset = async function (req, res, next) {
         let id = parseDocumentID(receivedID)
         let originalObject
         try {
-            originalObject = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+            originalObject = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
         } catch (error) {
             next(createExpressError(error))
             return
@@ -645,8 +650,8 @@ const patchUnset = async function (req, res, next) {
             delete objectReceived.__rerum //can't unset this
             delete objectReceived["@id"] //can't unset this
             // id is also protected in this case, so it can't be unset.
-            if(_contextid(originalObject["@context"])) delete objectReceived.id
-            
+            if (_contextid(originalObject["@context"])) delete objectReceived.id
+
             /**
              * unset does not alter an existing key.  It removes an existing key.
              * The request payload had {key:null} to flag keys to be removed.
@@ -667,7 +672,7 @@ const patchUnset = async function (req, res, next) {
                 res.set(utils.configureWebAnnoHeadersFor(originalObject))
                 originalObject = idNegotiation(originalObject)
                 originalObject.new_obj_state = JSON.parse(JSON.stringify(originalObject))
-                res.location(originalObject[_contextid(originalObject["@context"]) ? "id":"@id"])
+                res.location(originalObject[_contextid(originalObject["@context"]) ? "id" : "@id"])
                 res.status(200)
                 res.json(originalObject)
                 return
@@ -679,7 +684,7 @@ const patchUnset = async function (req, res, next) {
             delete patchedObject["_id"]
             delete patchedObject["@id"]
             // id is also protected in this case, so it can't be set.
-            if(_contextid(patchedObject["@context"])) delete patchedObject.id
+            if (_contextid(patchedObject["@context"])) delete patchedObject.id
             delete patchedObject["@context"]
             let newObject = Object.assign(context, { "@id": process.env.RERUM_ID_PREFIX + id }, patchedObject, rerumProp, { "_id": id })
             console.log("PATCH UNSET")
@@ -690,7 +695,7 @@ const patchUnset = async function (req, res, next) {
                     res.set(utils.configureWebAnnoHeadersFor(newObject))
                     newObject = idNegotiation(newObject)
                     newObject.new_obj_state = JSON.parse(JSON.stringify(newObject))
-                    res.location(newObject[_contextid(newObject["@context"]) ? "id":"@id"])
+                    res.location(newObject[_contextid(newObject["@context"]) ? "id" : "@id"])
                     res.status(200)
                     res.json(newObject)
                     return
@@ -734,7 +739,7 @@ const overwrite = async function (req, res, next) {
         let id = parseDocumentID(receivedID)
         let originalObject
         try {
-            originalObject = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+            originalObject = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
         } catch (error) {
             next(createExpressError(error))
             return
@@ -773,7 +778,7 @@ const overwrite = async function (req, res, next) {
             delete objectReceived["_id"]
             delete objectReceived["__rerum"]
             // id is also protected in this case, so it can't be set.
-            if(_contextid(objectReceived["@context"])) delete objectReceived.id
+            if (_contextid(objectReceived["@context"])) delete objectReceived.id
             delete objectReceived["@context"]
             let newObject = Object.assign(context, { "@id": originalObject["@id"] }, objectReceived, rerumProp, { "_id": id })
             let result
@@ -788,7 +793,7 @@ const overwrite = async function (req, res, next) {
             res.set(utils.configureWebAnnoHeadersFor(newObject))
             newObject = idNegotiation(newObject)
             newObject.new_obj_state = JSON.parse(JSON.stringify(newObject))
-            res.location(newObject[_contextid(newObject["@context"]) ? "id":"@id"])
+            res.location(newObject[_contextid(newObject["@context"]) ? "id" : "@id"])
             res.json(newObject)
             return
         }
@@ -817,23 +822,23 @@ const release = async function (req, res, next) {
     let agentRequestingRelease = getAgentClaim(req, next)
     let id = req.params["_id"]
     let slug = ""
-    let err = {"message":""}
+    let err = { "message": "" }
     let treeHealed = false
-    if(req.get("Slug")){
+    if (req.get("Slug")) {
         let slug_json = await generateSlugId(req.get("Slug"), next)
-        if(slug_json.code){
+        if (slug_json.code) {
             next(createExpressError(slug_json))
             return
         }
-        else{
+        else {
             slug = slug_json.slug_id
         }
     }
-    if (id){
-        let originalObject 
+    if (id) {
+        let originalObject
         try {
-            originalObject = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
-        } 
+            originalObject = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
+        }
         catch (error) {
             next(createExpressError(error))
             return
@@ -841,7 +846,7 @@ const release = async function (req, res, next) {
         let safe_original = JSON.parse(JSON.stringify(originalObject))
         let previousReleasedID = safe_original.__rerum.releases.previous
         let nextReleases = safe_original.__rerum.releases.next
-        
+
         if (utils.isDeleted(safe_original)) {
             err = Object.assign(err, {
                 message: `The object you are trying to release is deleted. ${err.message}`,
@@ -865,26 +870,26 @@ const release = async function (req, res, next) {
             return
         }
         console.log("RELEASE")
-        if (null !== originalObject){
+        if (null !== originalObject) {
             safe_original["__rerum"].isReleased = new Date(Date.now()).toISOString().replace("Z", "")
             safe_original["__rerum"].releases.replaces = previousReleasedID
             safe_original["__rerum"].slug = slug
             if (previousReleasedID !== "") {
                 // A releases tree exists and an ancestral object is being released.
                 treeHealed = await healReleasesTree(safe_original)
-            } 
-            else { 
+            }
+            else {
                 // There was no releases previous value.
-                if (nextReleases.length > 0) { 
+                if (nextReleases.length > 0) {
                     // The release tree has been established and a descendant object is now being released.
                     treeHealed = await healReleasesTree(safe_original)
-                } 
-                else { 
+                }
+                else {
                     // The release tree has not been established
                     treeHealed = await establishReleasesTree(safe_original)
                 }
             }
-            if (treeHealed) { 
+            if (treeHealed) {
                 // If the tree was established/healed
                 // perform the update to isReleased of the object being released. Its
                 // releases.next[] and releases.previous are already correct.
@@ -892,7 +897,7 @@ const release = async function (req, res, next) {
                 let result
                 try {
                     result = await db.replaceOne({ "_id": id }, releasedObject)
-                } 
+                }
                 catch (error) {
                     next(createExpressError(error))
                     return
@@ -901,16 +906,16 @@ const release = async function (req, res, next) {
                     //result didn't error out, the action was not performed.  Sometimes, this is a neutral thing.  Sometimes it is indicative of an error.
                 }
                 res.set(utils.configureWebAnnoHeadersFor(releasedObject))
-                console.log(releasedObject._id+" has been released")
+                console.log(releasedObject._id + " has been released")
                 releasedObject = idNegotiation(releasedObject)
                 releasedObject.new_obj_state = JSON.parse(JSON.stringify(releasedObject))
-                res.location(releasedObject[_contextid(releasedObject["@context"]) ? "id":"@id"])
+                res.location(releasedObject[_contextid(releasedObject["@context"]) ? "id" : "@id"])
                 res.json(releasedObject)
                 return
-            } 
+            }
         }
     }
-    else{
+    else {
         //This was a bad request
         err = {
             message: "You must provide the id of an object to release.  Use /release/id-here or release?_id=id-here.",
@@ -959,7 +964,7 @@ const id = async function (req, res, next) {
     res.set("Content-Type", "application/json; charset=utf-8")
     let id = req.params["_id"]
     try {
-        let match = await db.findOne({"$or": [{"_id": id}, {"__rerum.slug": id}]})
+        let match = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
         if (match) {
             res.set(utils.configureWebAnnoHeadersFor(match))
             //Support built in browser caching
@@ -974,7 +979,7 @@ const id = async function (req, res, next) {
         let err = {
             "message": `No RERUM object with id '${id}'`,
             "status": 404
-        } 
+        }
         next(createExpressError(err))
     } catch (error) {
         next(createExpressError(error))
@@ -1002,9 +1007,9 @@ const bulkCreate = async function (req, res, next) {
         next(createExpressError(err))
         return
     }
-    const gatekeep = documents.filter(d=> {
+    const gatekeep = documents.filter(d => {
         // Each item must be valid JSON, but can't be an array.
-        if(Array.isArray(d) || typeof d !== "object") return d
+        if (Array.isArray(d) || typeof d !== "object") return d
         try {
             JSON.parse(JSON.stringify(d))
         } catch (err) {
@@ -1012,8 +1017,8 @@ const bulkCreate = async function (req, res, next) {
         }
         // Items must not have an @id, and in some cases same for id.
         const idcheck = _contextid(d["@context"]) ? (d.id ?? d["@id"]) : d["@id"]
-        if(idcheck) return d
-    }) 
+        if (idcheck) return d
+    })
     if (gatekeep.length > 0) {
         err.message = "All objects in the body of a `/bulkCreate` must be JSON and must not contain a declared identifier property."
         err.status = 400
@@ -1037,24 +1042,24 @@ const bulkCreate = async function (req, res, next) {
     // unordered bulkWrite() operations have better performance metrics.
     let bulkOps = []
     const generatorAgent = getAgentClaim(req, next)
-    for(let d of documents) {
+    for (let d of documents) {
         // Do not create empty {}s
-        if(Object.keys(d).length === 0) continue
+        if (Object.keys(d).length === 0) continue
         const providedID = d?._id
         const id = isValidID(providedID) ? providedID : ObjectID()
         d = utils.configureRerumOptions(generatorAgent, d)
         // id is also protected in this case, so it can't be set.
-        if(_contextid(d["@context"])) delete d.id
+        if (_contextid(d["@context"])) delete d.id
         d._id = id
         d['@id'] = `${process.env.RERUM_ID_PREFIX}${id}`
-        bulkOps.push({ insertOne : { "document" : d }})
+        bulkOps.push({ insertOne: { "document": d } })
     }
     try {
-        let dbResponse = await db.bulkWrite(bulkOps, {'ordered':false})
+        let dbResponse = await db.bulkWrite(bulkOps, { 'ordered': false })
         res.set("Content-Type", "application/json; charset=utf-8")
-        res.set("Link",dbResponse.result.insertedIds.map(r => `${process.env.RERUM_ID_PREFIX}${r._id}`)) // https://www.rfc-editor.org/rfc/rfc5988
+        res.set("Link", dbResponse.result.insertedIds.map(r => `${process.env.RERUM_ID_PREFIX}${r._id}`)) // https://www.rfc-editor.org/rfc/rfc5988
         res.status(201)
-        const estimatedResults = bulkOps.map(f=>{
+        const estimatedResults = bulkOps.map(f => {
             let doc = f.insertOne.document
             doc = idNegotiation(doc)
             return doc
@@ -1093,7 +1098,7 @@ const bulkUpdate = async function (req, res, next) {
     }
     const gatekeep = documents.filter(d => {
         // Each item must be valid JSON, but can't be an array.
-        if(Array.isArray(d) || typeof d !== "object") return d
+        if (Array.isArray(d) || typeof d !== "object") return d
         try {
             JSON.parse(JSON.stringify(d))
         } catch (err) {
@@ -1101,7 +1106,7 @@ const bulkUpdate = async function (req, res, next) {
         }
         // Items must have an @id, or in some cases an id will do
         const idcheck = _contextid(d["@context"]) ? (d.id ?? d["@id"]) : d["@id"]
-        if(!idcheck) return d
+        if (!idcheck) return d
     })
     // The empty {}s will cause this error
     if (gatekeep.length > 0) {
@@ -1113,17 +1118,17 @@ const bulkUpdate = async function (req, res, next) {
     // unordered bulkWrite() operations have better performance metrics.
     let bulkOps = []
     const generatorAgent = getAgentClaim(req, next)
-    for(const objectReceived of documents){
+    for (const objectReceived of documents) {
         // We know it has an id
         const idReceived = objectReceived["@id"] ?? objectReceived.id
         // Update the same thing twice?  can vs should.
         // if(encountered.includes(idReceived)) continue
         encountered.push(idReceived)
-        if(!idReceived.includes(process.env.RERUM_ID_PREFIX)) continue
+        if (!idReceived.includes(process.env.RERUM_ID_PREFIX)) continue
         let id = parseDocumentID(idReceived)
         let originalObject
         try {
-            originalObject = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+            originalObject = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
         } catch (error) {
             next(createExpressError(error))
             return
@@ -1137,28 +1142,29 @@ const bulkUpdate = async function (req, res, next) {
         delete objectReceived["_id"]
         delete objectReceived["@id"]
         // id is also protected in this case, so it can't be set.
-        if(_contextid(objectReceived["@context"])) delete objectReceived.id
+        if (_contextid(objectReceived["@context"])) delete objectReceived.id
         delete objectReceived["@context"]
         let newObject = Object.assign(context, { "@id": process.env.RERUM_ID_PREFIX + id }, objectReceived, rerumProp, { "_id": id })
-        bulkOps.push({ insertOne : { "document" : newObject }})
-        if(originalObject.__rerum.history.next.indexOf(newObject["@id"]) === -1){
+        bulkOps.push({ insertOne: { "document": newObject } })
+        if (originalObject.__rerum.history.next.indexOf(newObject["@id"]) === -1) {
             originalObject.__rerum.history.next.push(newObject["@id"])
-            const replaceOp = { replaceOne :
+            const replaceOp = {
+                replaceOne:
                 {
-                    "filter" : { "_id": originalObject["_id"] },
-                    "replacement" : originalObject,
-                    "upsert" : false
+                    "filter": { "_id": originalObject["_id"] },
+                    "replacement": originalObject,
+                    "upsert": false
                 }
             }
             bulkOps.push(replaceOp)
         }
     }
     try {
-        let dbResponse = await db.bulkWrite(bulkOps, {'ordered':false})
+        let dbResponse = await db.bulkWrite(bulkOps, { 'ordered': false })
         res.set("Content-Type", "application/json; charset=utf-8")
         res.set("Link", dbResponse.result.insertedIds.map(r => `${process.env.RERUM_ID_PREFIX}${r._id}`)) // https://www.rfc-editor.org/rfc/rfc5988
         res.status(200)
-        const estimatedResults = bulkOps.filter(f=>f.insertOne).map(f=>{
+        const estimatedResults = bulkOps.filter(f => f.insertOne).map(f => {
             let doc = f.insertOne.document
             doc = idNegotiation(doc)
             return doc
@@ -1180,7 +1186,7 @@ const idHeadRequest = async function (req, res, next) {
     res.set("Content-Type", "application/json; charset=utf-8")
     let id = req.params["_id"]
     try {
-        let match = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+        let match = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
         if (match) {
             const size = Buffer.byteLength(JSON.stringify(match))
             res.set("Content-Length", size)
@@ -1215,7 +1221,7 @@ const queryHeadRequest = async function (req, res, next) {
         let err = {
             "message": `There is no object in the database with id '${id}'.  Check the URL.`,
             "status": 404
-        } 
+        }
         next(createExpressError(err))
     } catch (error) {
         next(createExpressError(error))
@@ -1233,7 +1239,7 @@ const since = async function (req, res, next) {
     let id = req.params["_id"]
     let obj
     try {
-        obj = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+        obj = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
     } catch (error) {
         next(createExpressError(error))
         return
@@ -1271,7 +1277,7 @@ const history = async function (req, res, next) {
     let id = req.params["_id"]
     let obj
     try {
-        obj = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+        obj = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
     } catch (error) {
         next(createExpressError(error))
         return
@@ -1305,7 +1311,7 @@ const sinceHeadRequest = async function (req, res, next) {
     let id = req.params["_id"]
     let obj
     try {
-        obj = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+        obj = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
     } catch (error) {
         next(createExpressError(error))
         return
@@ -1343,7 +1349,7 @@ const historyHeadRequest = async function (req, res, next) {
     let id = req.params["_id"]
     let obj
     try {
-        obj = await db.findOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+        obj = await db.findOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
     } catch (error) {
         next(createExpressError(error))
         return
@@ -1383,16 +1389,16 @@ const historyHeadRequest = async function (req, res, next) {
 async function getAllVersions(obj) {
     let ls_versions
     let primeID = obj?.__rerum.history.prime
-    let rootObj = ( primeID === "root") 
-    ?   //The obj passed in is root.  So it is the rootObj we need.
+    let rootObj = (primeID === "root")
+        ?   //The obj passed in is root.  So it is the rootObj we need.
         JSON.parse(JSON.stringify(obj))
-    :   //The obj passed in knows the ID of root, grab it from Mongo
+        :   //The obj passed in knows the ID of root, grab it from Mongo
         await db.findOne({ "@id": primeID })
-        /**
-         * Note that if you attempt the following code, it will cause  Cannot convert undefined or null to object in getAllVersions.
-         * rootObj = await db.findOne({"$or":[{"_id": primeID}, {"__rerum.slug": primeID}]})
-         * This is the because some of the @ids have different RERUM URL patterns on them.
-         **/
+    /**
+     * Note that if you attempt the following code, it will cause  Cannot convert undefined or null to object in getAllVersions.
+     * rootObj = await db.findOne({"$or":[{"_id": primeID}, {"__rerum.slug": primeID}]})
+     * This is the because some of the @ids have different RERUM URL patterns on them.
+     **/
     //All the children of this object will have its @id in __rerum.history.prime
     ls_versions = await db.find({ "__rerum.history.prime": rootObj['@id'] }).toArray()
     //The root object is a version, prepend it in
@@ -1495,7 +1501,7 @@ async function alterHistoryPrevious(objToUpdate, newPrevID) {
  */
 async function alterHistoryNext(objToUpdate, newNextID) {
     //We can keep this real short if we trust the objects sent into here.  I think these are private helper functions, and so we can.
-    if(objToUpdate.__rerum.history.next.indexOf(newNextID) === -1){
+    if (objToUpdate.__rerum.history.next.indexOf(newNextID) === -1) {
         objToUpdate.__rerum.history.next.push(newNextID)
         let result = await db.replaceOne({ "_id": objToUpdate["_id"] }, objToUpdate)
         return result.modifiedCount > 0
@@ -1544,7 +1550,7 @@ async function healHistoryTree(obj) {
         for (nextID of next_ids) {
             let objWithUpdate = {}
             const nextIdForQuery = parseDocumentID(nextID)
-            const objToUpdate = await db.findOne({"$or":[{"_id": nextIdForQuery}, {"__rerum.slug": nextIdForQuery}]})
+            const objToUpdate = await db.findOne({ "$or": [{ "_id": nextIdForQuery }, { "__rerum.slug": nextIdForQuery }] })
             if (null !== objToUpdate) {
                 let fixHistory = JSON.parse(JSON.stringify(objToUpdate))
                 if (objToDeleteisRoot) {
@@ -1585,7 +1591,7 @@ async function healHistoryTree(obj) {
             //The object being deleted had a previous that is internal to RERUM.  That previous object next[] must be updated with the deleted object's next[].
             //For external objects, do nothing is the right thing to do here.
             let objWithUpdate2 = {}
-            const objToUpdate2 = await db.findOne({"$or":[{"_id": nextIdForQuery}, {"__rerum.slug": nextIdForQuery}]})
+            const objToUpdate2 = await db.findOne({ "$or": [{ "_id": nextIdForQuery }, { "__rerum.slug": nextIdForQuery }] })
             if (null !== objToUpdate2) {
                 let fixHistory2 = JSON.parse(JSON.stringify(objToUpdate2))
                 let origNextArray = fixHistory2["__rerum"]["history"]["next"]
@@ -1622,7 +1628,7 @@ async function healHistoryTree(obj) {
         //The object being deleted had a previous that is internal to RERUM.  That previous object next[] must be updated with the deleted object's next[].
         //For external objects, do nothing is the right thing to do here.
         let previousIdForQuery = parseDocumentID(previous_id)
-        const objToUpdate2 = await db.findOne({"$or":[{"_id": previousIdForQuery}, {"__rerum.slug": previousIdForQuery}]})
+        const objToUpdate2 = await db.findOne({ "$or": [{ "_id": previousIdForQuery }, { "__rerum.slug": previousIdForQuery }] })
         if (null !== objToUpdate2) {
             let fixHistory2 = JSON.parse(JSON.stringify(objToUpdate2))
             let origNextArray = fixHistory2["__rerum"]["history"]["next"]
@@ -1721,9 +1727,9 @@ function createExpressError(err) {
  * This is not exposed over the http request and response.
  * Use it internally where necessary.  Ex. end to end Slug test
  */
-const remove = async function(id) {
+const remove = async function (id) {
     try {
-        const result = await db.deleteOne({"$or":[{"_id": id}, {"__rerum.slug": id}]})
+        const result = await db.deleteOne({ "$or": [{ "_id": id }, { "__rerum.slug": id }] })
         if (!result.deletedCount === 1) {
             throw Error("Could not remove object")
         }
@@ -1754,7 +1760,7 @@ function getAgentClaim(req, next) {
         "message": "Could not get agent from req.user.  Have you registered with RERUM?",
         "status": 403
     }
-    next(createExpressError(err))  
+    next(createExpressError(err))
 }
 
 /**
@@ -1770,23 +1776,23 @@ function getAgentClaim(req, next) {
  * @param obj the RERUM object being released
  * @return Boolean sucess or some kind of Exception
  */
-async function establishReleasesTree(releasing){
+async function establishReleasesTree(releasing) {
     let success = true
     const all = await getAllVersions(releasing)
-    .catch(error => {
-        console.error(error)
-        return []
-    })
+        .catch(error => {
+            console.error(error)
+            return []
+        })
     const descendants = getAllDescendants(all, releasing, [])
     const ancestors = getAllAncestors(all, releasing, [])
-    for(const d of descendants){
+    for (const d of descendants) {
         let safe_descendant = JSON.parse(JSON.stringify(d))
         let d_id = safe_descendant._id
         safe_descendant.__rerum.releases.previous = releasing["@id"]
         let result
         try {
             result = await db.replaceOne({ "_id": d_id }, safe_descendant)
-        } 
+        }
         catch (error) {
             next(createExpressError(error))
             return
@@ -1795,18 +1801,18 @@ async function establishReleasesTree(releasing){
             //result didn't error out, the action was not performed.  Sometimes, this is a neutral thing.  Sometimes it is indicative of an error.
             //console.log("nothing modified...")
             //success = false
-        }  
+        }
     }
-    for(const a of ancestors){
+    for (const a of ancestors) {
         let safe_ancestor = JSON.parse(JSON.stringify(a))
         let a_id = safe_ancestor._id
-        if(safe_ancestor.__rerum.releases.next.indexOf(releasing["@id"]) === -1){
-            safe_ancestor.__rerum.releases.next.push(releasing["@id"])    
+        if (safe_ancestor.__rerum.releases.next.indexOf(releasing["@id"]) === -1) {
+            safe_ancestor.__rerum.releases.next.push(releasing["@id"])
         }
         let result
         try {
             result = await db.replaceOne({ "_id": a_id }, safe_ancestor)
-        } 
+        }
         catch (error) {
             next(createExpressError(error))
             return
@@ -1815,7 +1821,7 @@ async function establishReleasesTree(releasing){
             //result didn't error out, the action was not performed.  Sometimes, this is a neutral thing.  Sometimes it is indicative of an error.
             //console.log("nothing modified...")
             //success = false
-        }  
+        }
     }
     return success
 }
@@ -1833,29 +1839,29 @@ async function establishReleasesTree(releasing){
 async function healReleasesTree(releasing) {
     let success = true
     const all = await getAllVersions(releasing)
-    .catch(error => {
-        console.error(error)
-        return []
-    })
+        .catch(error => {
+            console.error(error)
+            return []
+        })
     const descendants = getAllDescendants(all, releasing, [])
     const ancestors = getAllAncestors(all, releasing, [])
-    for(const d of descendants){
+    for (const d of descendants) {
         let safe_descendant = JSON.parse(JSON.stringify(d))
         let d_id = safe_descendant._id
-        if(d.__rerum.releases.previous === releasing.__rerum.releases.previous){
+        if (d.__rerum.releases.previous === releasing.__rerum.releases.previous) {
             // If the descendant's previous matches the node I am releasing's
             // releases.previous, swap the descendant releses.previous with node I am releasing's @id.
             safe_descendant.__rerum.releases.previous = releasing["@id"]
-            if(d.__rerum.isReleased !== ""){
+            if (d.__rerum.isReleased !== "") {
                 // If this descendant is released, it replaces the node being released
-                if(d.__rerum.releases.previous === releasing["@id"]){
+                if (d.__rerum.releases.previous === releasing["@id"]) {
                     safe_descendant.__rerum.releases.replaces = releasing["@id"]
                 }
             }
             let result
             try {
                 result = await db.replaceOne({ "_id": d_id }, safe_descendant)
-            } 
+            }
             catch (error) {
                 next(createExpressError(error))
                 return
@@ -1864,10 +1870,10 @@ async function healReleasesTree(releasing) {
                 //result didn't error out, the action was not performed.  Sometimes, this is a neutral thing.  Sometimes it is indicative of an error.
                 //success = false
             }
-        }    
+        }
     }
     let origNextArray = releasing.__rerum.releases.next
-    for (const a of ancestors){
+    for (const a of ancestors) {
         let safe_ancestor = JSON.parse(JSON.stringify(a))
         let a_id = safe_ancestor._id
         let ancestorNextArray = safe_ancestor.__rerum.releases.next
@@ -1875,17 +1881,17 @@ async function healReleasesTree(releasing) {
             // The releases.next on the node I am releasing is empty. This means only other
             // ancestors with empty releases.next[] are between me and the next ancenstral released node
             // Add the id of the node I am releasing into the ancestor's releases.next array.
-            if(ancestorNextArray.indexOf(releasing["@id"]) === -1){
+            if (ancestorNextArray.indexOf(releasing["@id"]) === -1) {
                 ancestorNextArray.push(releasing["@id"])
             }
         }
-        else{
+        else {
             // The releases.next on the node I am releasing has 1 - infinity entries. I need
             // to check if any of the entries of that array exist in the releases.next of my
             // ancestors and remove them before
             // adding the @id of the released node into the acenstral releases.next array.  
-            for(const i of origNextArray){
-                for(const j of ancestorNextArray){
+            for (const i of origNextArray) {
+                for (const j of ancestorNextArray) {
                     // For each id in the ancestor's releases.next array
                     if (i === j) {
                         // If the id is in the next array of the object I am releasing and in the
@@ -1893,7 +1899,7 @@ async function healReleasesTree(releasing) {
                         const index = ancestorNextArray.indexOf(j)
                         if (index > -1) {
                             // remove that id.
-                          ancestorNextArray = ancestorNextArray.splice(index, 1)
+                            ancestorNextArray = ancestorNextArray.splice(index, 1)
                         }
                     }
                 }
@@ -1903,7 +1909,7 @@ async function healReleasesTree(releasing) {
             // because I can use the releases.previous there.
             // Once I have checked against all id's in the ancestor node releases.next[] and removed the ones I needed to
             // Add the id of the node I am releasing into the ancestor's releases.next array.
-            if(ancestorNextArray.indexOf(releasing["@id"]) === -1){
+            if (ancestorNextArray.indexOf(releasing["@id"]) === -1) {
                 ancestorNextArray.push(releasing["@id"])
             }
         }
@@ -1911,7 +1917,7 @@ async function healReleasesTree(releasing) {
         let result
         try {
             result = await db.replaceOne({ "_id": a_id }, safe_ancestor)
-        } 
+        }
         catch (error) {
             next(createExpressError(error))
             return
@@ -1920,7 +1926,7 @@ async function healReleasesTree(releasing) {
             //result didn't error out, the action was not performed.  Sometimes, this is a neutral thing.  Sometimes it is indicative of an error.
             //success = false
         }
-    
+
     }
     return success
 }
@@ -1930,11 +1936,11 @@ async function healReleasesTree(releasing) {
  * This is an indexed key so lookup should be very quick.
  * @param {String} atID URI of document at //store.rerum.io/v1/id/
  */
-function parseDocumentID(atID){
-    if(typeof atID !== 'string') {
+function parseDocumentID(atID) {
+    if (typeof atID !== 'string') {
         throw new Error("Unable to parse this type.")
     }
-    if(!/^https?/.test(atID)){
+    if (!/^https?/.test(atID)) {
         throw new Error(`Designed for parsing URL strings. Please check: ${atID}`)
     }
     return atID.split('/').pop()
@@ -1967,7 +1973,7 @@ const _gog_fragments_from_manuscript = async function (req, res, next) {
         })
     }
     // Must have a properly formed body with a usable value
-    else if(!manID || !manID.startsWith("http")){
+    else if (!manID || !manID.startsWith("http")) {
         err = Object.assign(err, {
             message: `The body must be JSON like {"ManuscriptWitness":"witness_uri_here"}.`,
             status: 400
@@ -1980,40 +1986,40 @@ const _gog_fragments_from_manuscript = async function (req, res, next) {
     try {
         let matches = []
         const partOfConditions = [
-            {"body.partOf.value": manID.replace(/^https?/, "http")},
-            {"body.partOf.value": manID.replace(/^https?/, "https")},
-            {"body.partOf": manID.replace(/^https?/, "http")},
-            {"body.partOf": manID.replace(/^https?/, "https")}
+            { "body.partOf.value": manID.replace(/^https?/, "http") },
+            { "body.partOf.value": manID.replace(/^https?/, "https") },
+            { "body.partOf": manID.replace(/^https?/, "http") },
+            { "body.partOf": manID.replace(/^https?/, "https") }
         ]
         const generatorConditions = [
-            {"__rerum.generatedBy":  agent.replace(/^https?/, "http")},
-            {"__rerum.generatedBy":  agent.replace(/^https?/, "https")}
+            { "__rerum.generatedBy": agent.replace(/^https?/, "http") },
+            { "__rerum.generatedBy": agent.replace(/^https?/, "https") }
         ]
         const fragmentTypeConditions = [
-            {"witnessFragment.type": "WitnessFragment"},
-            {"witnessFragment.@type": "WitnessFragment"}
+            { "witnessFragment.type": "WitnessFragment" },
+            { "witnessFragment.@type": "WitnessFragment" }
         ]
         const annoTypeConditions = [
-            {"type": "Annotation"},
-            {"@type": "Annotation"},
-            {"@type": "oa:Annotation"}
+            { "type": "Annotation" },
+            { "@type": "Annotation" },
+            { "@type": "oa:Annotation" }
         ]
         let witnessFragmentPipeline = [
             // Step 1: Detect Annotations bodies noting their 'target' is 'partOf' this Manuscript
             {
                 $match: {
                     "__rerum.history.next": { "$exists": true, "$size": 0 },
-                    "$and":[
-                        {"$or": annoTypeConditions},
-                        {"$or": partOfConditions},
-                        {"$or": generatorConditions}
+                    "$and": [
+                        { "$or": annoTypeConditions },
+                        { "$or": partOfConditions },
+                        { "$or": generatorConditions }
                     ]
                 }
             },
             // Step 1.1 through 1.3 for limit and skip functionality.
-            { $sort : { _id: 1 } },
-            { $skip : skip },
-            { $limit : limit },
+            { $sort: { _id: 1 } },
+            { $skip: skip },
+            { $limit: limit },
             // Step 2: Using the target of those Annotations lookup the Entity they represent and store them in a witnessFragment property on the Annotation
             // Note that $match had filtered down the alpha collection, so we use $lookup to look through the whole collection again.
             // FIXME? a target that is http will not match an @id that is https
@@ -2027,7 +2033,7 @@ const _gog_fragments_from_manuscript = async function (req, res, next) {
             },
             // Step 3: Filter out anything that is not a WitnessFragment entity (and a leaf)
             {
-                $match: { 
+                $match: {
                     "witnessFragment.__rerum.history.next": { "$exists": true, "$size": 0 },
                     "$or": fragmentTypeConditions
                 }
@@ -2050,12 +2056,12 @@ const _gog_fragments_from_manuscript = async function (req, res, next) {
         // console.log("Start GoG WitnessFragment Aggregator")
         const start = Date.now();
         let witnessFragments = await db.aggregate(witnessFragmentPipeline).toArray()
-        .then((fragments) => {
-            if (fragments instanceof Error) {
-              throw fragments
-            }
-            return fragments
-        })
+            .then((fragments) => {
+                if (fragments instanceof Error) {
+                    throw fragments
+                }
+                return fragments
+            })
         const fragmentSet = new Set(witnessFragments)
         witnessFragments = Array.from(fragmentSet.values())
         // Note that a server side expand() is available and could be used to expand these fragments here.
@@ -2099,7 +2105,7 @@ const _gog_glosses_from_manuscript = async function (req, res, next) {
         })
     }
     // Must have a properly formed body with a usable value
-    else if(!manID || !manID.startsWith("http")){
+    else if (!manID || !manID.startsWith("http")) {
         err = Object.assign(err, {
             message: `The body must be JSON like {"ManuscriptWitness":"witness_uri_here"}.`,
             status: 400
@@ -2112,40 +2118,40 @@ const _gog_glosses_from_manuscript = async function (req, res, next) {
     try {
         let matches = []
         const partOfConditions = [
-            {"body.partOf.value": manID.replace(/^https?/, "http")},
-            {"body.partOf.value": manID.replace(/^https?/, "https")},
-            {"body.partOf": manID.replace(/^https?/, "http")},
-            {"body.partOf": manID.replace(/^https?/, "https")}
+            { "body.partOf.value": manID.replace(/^https?/, "http") },
+            { "body.partOf.value": manID.replace(/^https?/, "https") },
+            { "body.partOf": manID.replace(/^https?/, "http") },
+            { "body.partOf": manID.replace(/^https?/, "https") }
         ]
         const generatorConditions = [
-            {"__rerum.generatedBy":  agent.replace(/^https?/, "http")},
-            {"__rerum.generatedBy":  agent.replace(/^https?/, "https")}
+            { "__rerum.generatedBy": agent.replace(/^https?/, "http") },
+            { "__rerum.generatedBy": agent.replace(/^https?/, "https") }
         ]
         const fragmentTypeConditions = [
-            {"witnessFragment.type": "WitnessFragment"},
-            {"witnessFragment.@type": "WitnessFragment"}
+            { "witnessFragment.type": "WitnessFragment" },
+            { "witnessFragment.@type": "WitnessFragment" }
         ]
         const annoTypeConditions = [
-            {"type": "Annotation"},
-            {"@type": "Annotation"},
-            {"@type": "oa:Annotation"}
+            { "type": "Annotation" },
+            { "@type": "Annotation" },
+            { "@type": "oa:Annotation" }
         ]
         let glossPipeline = [
             // Step 1: Detect Annotations bodies noting their 'target' is 'partOf' this Manuscript
             {
                 $match: {
                     "__rerum.history.next": { $exists: true, $size: 0 },
-                    "$and":[
-                        {"$or": annoTypeConditions},
-                        {"$or": partOfConditions},
-                        {"$or": generatorConditions}
+                    "$and": [
+                        { "$or": annoTypeConditions },
+                        { "$or": partOfConditions },
+                        { "$or": generatorConditions }
                     ]
                 }
             },
             // Step 1.1 through 1.3 for limit and skip functionality.
-            { $sort : { _id: 1 } },
-            { $skip : skip },
-            { $limit : limit },
+            { $sort: { _id: 1 } },
+            { $skip: skip },
+            { $limit: limit },
             // Step 2: Using the target of those Annotations lookup the Entity they represent and store them in a witnessFragment property on the Annotation
             // Note that $match had filtered down the alpha collection, so we use $lookup to look through the whole collection again.
             // FIXME? a target that is http will not match an @id that is https
@@ -2159,7 +2165,7 @@ const _gog_glosses_from_manuscript = async function (req, res, next) {
             },
             // Step 3: Filter Annotations to be only those which are for a WitnessFragment Entity
             {
-                $match: { 
+                $match: {
                     "$or": fragmentTypeConditions
                 }
             },
@@ -2187,8 +2193,8 @@ const _gog_glosses_from_manuscript = async function (req, res, next) {
             },
             // Step 7: Filter Annos down to those that are the 'references' Annotations
             {
-                $match: { 
-                    "anno.body.references":{ "$exists": true }
+                $match: {
+                    "anno.body.references": { "$exists": true }
                 }
             },
             // Step 7: Collect together the body.references.value[] of those Annotations.  Those are the relevant Gloss URIs.
@@ -2212,12 +2218,12 @@ const _gog_glosses_from_manuscript = async function (req, res, next) {
         // console.log("Start GoG Gloss Aggregator")
         // const start = Date.now();
         let glosses = await db.aggregate(glossPipeline).toArray()
-        .then((fragments) => {
-            if (fragments instanceof Error) {
-              throw fragments
-            }
-            return fragments
-          })
+            .then((fragments) => {
+                if (fragments instanceof Error) {
+                    throw fragments
+                }
+                return fragments
+            })
         const glossSet = new Set(glosses)
         glosses = Array.from(glossSet.values())
         // Note that a server side expand() is available and could be used to expand these fragments here.
@@ -2258,54 +2264,54 @@ const _gog_glosses_from_manuscript = async function (req, res, next) {
 * @return the expanded entity object
 *
 */
-const expand = async function(primitiveEntity, GENERATOR=undefined, CREATOR=undefined){
-    if(!primitiveEntity?.["@id"] || primitiveEntity?.id) return primitiveEntity
+const expand = async function (primitiveEntity, GENERATOR = undefined, CREATOR = undefined) {
+    if (!primitiveEntity?.["@id"] || primitiveEntity?.id) return primitiveEntity
     const targetId = primitiveEntity["@id"] ?? primitiveEntity.id ?? "unknown"
     let queryObj = {
         "__rerum.history.next": { $exists: true, $size: 0 }
     }
     let targetPatterns = ["target", "target.@id", "target.id"]
     let targetConditions = []
-    let annoTypeConditions = [{"type": "Annotation"}, {"@type":"Annotation"}, {"@type":"oa:Annotation"}]
+    let annoTypeConditions = [{ "type": "Annotation" }, { "@type": "Annotation" }, { "@type": "oa:Annotation" }]
 
     if (targetId.startsWith("http")) {
-        for(const targetKey of targetPatterns){
+        for (const targetKey of targetPatterns) {
             targetConditions.push({ [targetKey]: targetId.replace(/^https?/, "http") })
             targetConditions.push({ [targetKey]: targetId.replace(/^https?/, "https") })
         }
-        queryObj["$and"] = [{"$or": targetConditions}, {"$or": annoTypeConditions}]
-    } 
-    else{
+        queryObj["$and"] = [{ "$or": targetConditions }, { "$or": annoTypeConditions }]
+    }
+    else {
         queryObj["$or"] = annoTypeConditions
         queryObj.target = targetId
     }
 
     // Only expand with data from a specific app
-    if(GENERATOR) {
+    if (GENERATOR) {
         // Need to check http:// and https://
         const generatorConditions = [
-            {"__rerum.generatedBy":  GENERATOR.replace(/^https?/, "http")},
-            {"__rerum.generatedBy":  GENERATOR.replace(/^https?/, "https")}
+            { "__rerum.generatedBy": GENERATOR.replace(/^https?/, "http") },
+            { "__rerum.generatedBy": GENERATOR.replace(/^https?/, "https") }
         ]
         if (GENERATOR.startsWith("http")) {
-            queryObj["$and"].push({"$or": generatorConditions })
-        } 
-        else{
+            queryObj["$and"].push({ "$or": generatorConditions })
+        }
+        else {
             // It should be a URI, but this can be a fallback.
             queryObj["__rerum.generatedBy"] = GENERATOR
         }
     }
     // Only expand with data from a specific creator
-    if(CREATOR) {
+    if (CREATOR) {
         // Need to check http:// and https://
         const creatorConditions = [
-            {"creator":  CREATOR.replace(/^https?/, "http")},
-            {"creator":  CREATOR.replace(/^https?/, "https")}
+            { "creator": CREATOR.replace(/^https?/, "http") },
+            { "creator": CREATOR.replace(/^https?/, "https") }
         ]
         if (CREATOR.startsWith("http")) {
-            queryObj["$and"].push({"$or": creatorConditions })
-        } 
-        else{
+            queryObj["$and"].push({ "$or": creatorConditions })
+        }
+        else {
             // It should be a URI, but this can be a fallback.
             queryObj["creator"] = CREATOR
         }
@@ -2320,10 +2326,10 @@ const expand = async function(primitiveEntity, GENERATOR=undefined, CREATOR=unde
 
     // Combine the Annotation bodies with the primitive object
     let expandedEntity = JSON.parse(JSON.stringify(primitiveEntity))
-    for(const anno of matches){
+    for (const anno of matches) {
         const body = anno.body
         let keys = Object.keys(body)
-        if(!keys || keys.length !== 1) return
+        if (!keys || keys.length !== 1) return
         let key = keys[0]
         let val = body[key].value ?? body[key]
         expandedEntity[key] = val
@@ -2333,28 +2339,28 @@ const expand = async function(primitiveEntity, GENERATOR=undefined, CREATOR=unde
 }
 
 export default {
- index,
- create,
- deleteObj,
- putUpdate,
- patchUpdate,
- patchSet,
- patchUnset,
- generateSlugId,
- overwrite,
- release,
- query,
- id,
- bulkCreate,
- bulkUpdate,
- idHeadRequest,
- queryHeadRequest,
- since,
- history,
- sinceHeadRequest,
- historyHeadRequest,
- remove,
- _gog_glosses_from_manuscript,
- _gog_fragments_from_manuscript,
- idNegotiation
+    index,
+    create,
+    deleteObj,
+    putUpdate,
+    patchUpdate,
+    patchSet,
+    patchUnset,
+    generateSlugId,
+    overwrite,
+    release,
+    query,
+    id,
+    bulkCreate,
+    bulkUpdate,
+    idHeadRequest,
+    queryHeadRequest,
+    since,
+    history,
+    sinceHeadRequest,
+    historyHeadRequest,
+    remove,
+    _gog_glosses_from_manuscript,
+    _gog_fragments_from_manuscript,
+    idNegotiation
 }
