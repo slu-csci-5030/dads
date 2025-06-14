@@ -15,7 +15,7 @@ CORS(app)
 
 @app.route('/data', methods=['POST', 'GET'])
 def data():
-    with open('Backend/static/test_data.csv', encoding='utf-8') as csv_file:
+    with open('./static/test_data.csv', encoding='utf-8') as csv_file:
         csv_reader = csv.DictReader(csv_file)
 
         json_data = []
