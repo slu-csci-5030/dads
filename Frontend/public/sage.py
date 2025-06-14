@@ -5,7 +5,13 @@ Module Docstring: Processes number fields and dynamical systems from LMFDB data 
 import json
 import csv
 from six.moves.urllib.request import urlopen
-from sage.all import QQ, PolynomialRing, NumberField, ProjectiveSpace, DynamicalSystem
+from sage.all import (
+    QQ,
+    PolynomialRing,
+    NumberField,
+    ProjectiveSpace,
+    DynamicalSystem,
+)
 
 def get_sage_field_nf(label):
     """
@@ -60,10 +66,9 @@ def make_sage_func_nf(coeffs, field_label):
     degree = len(coeffs[0]) - 1
     polynomials = []
     for coeff_list in coeffs:
-        poly = sum(
-            x_var**(degree-i) * y_var**i * field(coeff_list[i])
-            for i in range(degree + 1)
-        )
+        poly = 0
+        for i in range(degree + 1):
+            poly += x_var**(degree - i) * y_var**i * field(coeff_list[i])
         polynomials.append(poly)
     return DynamicalSystem(polynomials, domain=projective_space)
 
@@ -81,21 +86,21 @@ def process_data(csv_file='data.csv'):
     try:
         with open(csv_file, 'r', encoding='utf-8') as file:
             reader = csv.reader(file)
-            next(reader)  # Skip header if present
+            next(reader) 
             data_list = [
-                (row[0], json.loads(row[1]), row[2])  # coeffs is JSON-encoded
+                (row[0], json.loads(row[1]), row[2])
                 for row in reader
             ]
         for label, coeffs, field_label in data_list:
-            dynamical_system = make_sage_func_nf(coeffs, field_label)
-            if dynamical_system:
-                function_list.append([label, dynamical_system])
+            dyn_system = make_sage_func_nf(coeffs, field_label)
+            if dyn_system:
+                function_list.append([label, dyn_system])
         return function_list
     except Exception as e:
         with open('lmfdb_errors.log', 'a', encoding='utf-8') as log_file:
             log_file.write(f'Error processing CSV: {str(e)}\n')
         return []
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     result = process_data('sample_data.csv')
     print(result)
